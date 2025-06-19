@@ -1,0 +1,42 @@
+parameters:
+- name: pythonVersion
+  default: '3.12'
+- name: path
+  default: .
+- name: artifactName
+  default: _funcapp
+- name: buildId
+
+steps:
+
+- checkout: self
+  clean: true
+  persistCredentials: true
+  path: repo
+
+- task: UsePythonVersion@0
+  displayName: Use Python ${{ parameters.pythonVersion }}
+  inputs:
+    versionSpec: ${{ parameters.pythonVersion }}
+    architecture: x64
+
+- bash: |
+    pip install uv
+    uv sync
+
+    echo "Preparing clean build directory..."
+    mkdir -p $(Build.ArtifactStagingDirectory)/clean
+    rsync -av --exclude-from='.funcignorepipeline' ./ $(Build.ArtifactStagingDirectory)/clean
+
+    echo "Creating ZIP from clean directory..."
+    cd $(Build.ArtifactStagingDirectory)/clean
+    zip -r ../${{ parameters.buildId }}.zip .
+  displayName: Install dependencies and create filtered ZIP
+  workingDirectory: $(Build.SourcesDirectory)/${{ parameters.path }}
+
+- task: PublishBuildArtifacts@1
+  displayName: Publish function app artifact
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: '${{ parameters.artifactName }}'
+    publishLocation: 'Container'

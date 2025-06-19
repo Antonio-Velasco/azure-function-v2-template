@@ -1,0 +1,42 @@
+parameters:
+  # Working Directory
+-   name: workingDirectory
+    type: string
+
+  # Version of python for the function
+-   name: pythonVersion
+    type: string
+
+steps:
+-   task: UsePythonVersion@0
+    displayName: Use Python ${{ parameters.pythonVersion }}
+    inputs:
+        versionSpec: ${{ parameters.pythonVersion }}
+        architecture: x64
+
+-   bash: |
+        pip install -r requirements-dev.txt
+        uv sync
+        pre-commit run --all-files > precommit_output.txt 2>&1
+        uv run pytest --junitxml=tests/results/test-results.xml --disable-warnings
+    displayName: Syncing UV and run pre-commit
+    workingDirectory: ${{ parameters.workingDirectory }}
+
+# Publish tests results from pytest to pipeline
+-   task: PublishTestResults@2
+    displayName: Publish test results
+    condition: succeededOrFailed()
+    inputs:
+        testResultsFormat: JUnit
+        testResultsFiles: '**/test-*.xml'
+        searchFolder: ${{ parameters.workingDirectory }}/tests/results
+        testRunTitle: Tests
+
+# Publish pre-commit output as a pipeline artifact
+-   task: PublishPipelineArtifact@1
+    displayName: Publish pre-commit output
+    condition: succeededOrFailed()
+    inputs:
+          targetPath: ${{ parameters.workingDirectory }}/precommit_output.txt
+          artifact: precommit_output
+          publishLocation: pipeline

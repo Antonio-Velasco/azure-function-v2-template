@@ -25,30 +25,28 @@ This repository contains a template for creating an Azure Function using Python 
 -   Automated linting, static analysis, and unit test using tox
 -   Pre-commit configuration for formatting
 -   DevOps pipeline to test, build and deploy
--   Devcontainer configuration for development
+	-   Azure Machine Learning Experiment Register step (optional)
 
 ## Requirements
 
 -   Azure Functions Core Tools v2.x or later
 -   Python 3.12 or later
--   Visual Studio Code with the Remote - Containers extension installed
--   Optionally if not running in Devcontainer
-    - UV installed
-    - Pre-commit installed
+-   Visual Studio Code
+-   UV installed
+-   Pre-commit installed
 
 ## Getting Started
 
 1.  Clone the repository
 2.  Open the repository in Visual Studio Code
-3.  When prompted, reopen the repository in a Devcontainer
-4.  In the Devcontainer terminal, run the command `pip install -r requirements-dev.txt` to install the required dependencies
-5.  run `uv sync` to install the dependancies
-6.  run `pre-commit install` to have pre-commit automatically run before a commit.
-7.  To run the function locally, run the command `func start`
-8.  To run the unit tests, run the command `pytest`
-9.  To run the linter and static analysis, as well as tests, run the command `ruff`
-10.  To format the code according to pre-commit configuration, run the command `pre-commit run --all-files`
-11. To build and deploy the function, configure the DevOps pipeline to suit your needs.
+3.  In the terminal, run the command `pip install -r requirements-dev.txt` to install the required dependencies
+4.  run `uv sync` to install the dependancies
+5.  run `pre-commit install` to have pre-commit automatically run before a commit.
+6.  To run the function locally, run the command `func start`
+7.  To run the unit tests, run the command `pytest`
+8.  To run the linter and static analysis, as well as tests, run the command `ruff`
+9.  To format the code according to pre-commit configuration, run the command `pre-commit run --all-files`
+10. To build and deploy the function, configure the DevOps pipeline to suit your needs.
 
 ## Pre-commit
 
@@ -72,11 +70,11 @@ Tests are automatically run in the DevOps pipeline's build stage, ensuring that 
 
 The DevOps pipeline is configured using Azure Pipelines. The pipeline contains the following stages:
 
-1.  Test - Runs unit tests in Azure Function.
-2.  Build - Builds the Azure Function and runs unit tests.
-3.  Deploy to Dev - Deploys the Azure Function to the development environment.
-
-The pipeline is triggered on changes to the `main` branch.
+1.  **Test** - Runs unit tests.
+2.  **AML Classification Experiment Stage**: Runs and registers an experiment in Azure Machine Learning.
+3.  **Evaluate Models Stage**: Evaluates the models from the AML experiment.
+4.  **Build Stage**: Builds the function app.
+5.  **DeployDev Stage**: Deploys the function app to the development environment.
 
 ## License
 

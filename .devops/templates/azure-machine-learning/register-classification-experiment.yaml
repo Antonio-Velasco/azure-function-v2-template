@@ -1,0 +1,58 @@
+parameters:
+  - name: workingDirectory
+    type: string
+  - name: pythonVersion
+    type: string
+
+steps:
+  - task: UsePythonVersion@0
+    displayName: Run Azure Machine Learning Experiment
+    inputs:
+      versionSpec: ${{ parameters.pythonVersion }}
+      architecture: x64
+
+  - script: |
+      echo ${AZURE_SUBSCRIPTION_ID}
+      echo ${AZURE_CLIENT_ID}
+      echo ${AZURE_CLIENT_SECRET}
+      echo ${AZURE_TENANT_ID}
+      echo ${AZURE_RESOURCE_GROUP}
+      echo ${AZURE_WORKSPACE_NAME}
+      echo ${DATASTORE_NAME}
+      echo ${AZURE_OPENAI_API_KEY}
+      echo ${OPENAI_API_VERSION}
+      echo ${AZURE_OPENAI_ENDPOINT}
+      echo ${AZURE_OPEN_AI_MODEL_NAME}
+      echo ${AZURE_OPENAI_DEPLOYMENT_NAME}
+    displayName: 'Echo Azure Environment Variables'
+  
+  - script: |
+      echo "Logging into Azure..."
+      az login --service-principal \
+        --username "$AZURE_CLIENT_ID" \
+        --password "$AZURE_CLIENT_SECRET" \
+        --tenant "$AZURE_TENANT_ID"
+      az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+    displayName: 'Azure Login'
+
+  - bash: |
+      pip install uv
+      uv sync
+      uv pip install azureml-core==1.60.0
+      uv pip install azure-ai-ml==1.27.1
+      uv pip install xlrd==2.0.1
+      uv pip install azureml-fsspec==1.3.1
+      uv pip install azureml-dataprep==5.1.6
+      uv pip install pandas==2.2.3
+      uv pip install setuptools==80.9.0
+      uv pip install scikit-learn==1.6.1
+      uv pip install python-dotenv==1.1.0
+      uv pip install openpyxl==3.1.5
+    workingDirectory: ${{ parameters.workingDirectory }}
+    displayName: 'Install dependencies'
+
+  - bash: |
+      uv run ${{ parameters.workingDirectory }}/tests/aml_experiment/run-classification-experiment.py
+    workingDirectory: ${{ parameters.workingDirectory }}
+    displayName: 'Run experiment'
+

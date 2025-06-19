@@ -1,0 +1,156 @@
+trigger: none
+pr:
+    branches:
+        include:
+        -   main
+    paths:
+        include:
+        # Function app
+        -   function_app.py
+        -   functions/*
+        -   host.json
+        -   uv.lock
+        -   requirements-dev.txt
+
+        # Tests
+        -   tests/*
+
+        # Devops pipeline
+        -   .devops/variables/*
+        -   .devops/azure-function-pipeline-test.yml
+        -   .devops/templates/azure-functions/*
+
+variables:
+-   name: pythonVersion
+    value: 3.12
+
+-   name: functionWorkingDirectory
+    value: .
+
+-   name: artifactName
+    value: skillsfa
+
+-   name: vmImageName
+    value: ubuntu-latest
+
+pool:
+    vmImage: ubuntu-latest
+
+stages:
+-   stage: Test
+    jobs:
+    -   job: Test
+        steps:
+        -   bash: |
+                cat > ${{variables.functionWorkingDirectory}}/local.settings.json << EOF
+                    {"IsEncrypted": false, "Values": {
+                        "sample_key": "sample-value"
+                    }}
+                EOF
+                cat ${{variables.functionWorkingDirectory}}/local.settings.json
+            displayName: Testing local.settings.json
+        -   template: templates/azure-functions/test-func.yaml
+            parameters:
+                pythonVersion: ${{ variables.pythonVersion }}
+                workingDirectory: ${{variables.functionWorkingDirectory}}
+
+-   stage: AML_classification_experiment
+    variables:
+    -   group: 'acocatamlwstest'
+    jobs:
+    -   job: AML_classification_experiment
+        displayName: AML_classification_experiment
+        steps:
+        -   bash: |
+                cat > ${{variables.functionWorkingDirectory}}/local.settings.json << EOF
+                    {"IsEncrypted": false, "Values": {
+                        "sample_key": "sample-value"
+                    }}
+                EOF
+                cat ${{variables.functionWorkingDirectory}}/local.settings.json
+        -   template: templates/azure-machine-learning/register-classification-experiment.yaml
+            parameters:
+                pythonVersion: ${{ variables.pythonVersion }}
+                workingDirectory: ${{ variables.functionWorkingDirectory }}
+
+# -   stage: AML_requests_experiment
+#     variables:
+#     -   group: 'acocatamlwstest'
+#     jobs:
+#     -   job: AML_requests_experiment
+#         displayName: AML_requests_experiment
+#         steps:
+#         -   bash: |
+#                 cat > ${{variables.functionWorkingDirectory}}/local.settings.json << EOF
+#                     {"IsEncrypted": false, "Values": {
+#                         "sample_key": "sample-value"
+#                     }}
+#                 EOF
+#                 cat ${{variables.functionWorkingDirectory}}/local.settings.json
+#         -   template: templates/azure-machine-learning/register-requests-experiment.yaml
+#             parameters:
+#                 pythonVersion: ${{ variables.pythonVersion }}
+#                 workingDirectory: ${{ variables.functionWorkingDirectory }}
+
+-   stage: Evaluate_models
+    dependsOn: 
+    -   AML_classification_experiment
+    # -   AML_requests_experiment
+    condition: succeeded()
+    variables:
+    -   group: 'acocatamlwstest'
+    jobs:
+    -   job: Evaluate_Models
+        displayName: Evaluate Models
+        steps:
+        -   bash: |
+                cat > ${{variables.functionWorkingDirectory}}/local.settings.json << EOF
+                    {"IsEncrypted": false, "Values": {
+                        "sample_key": "sample-value"
+                    }}
+                EOF
+                cat ${{variables.functionWorkingDirectory}}/local.settings.json
+        -   template: templates/azure-machine-learning/evaluate-models.yaml
+            parameters:
+                workingDirectory: ${{ variables.functionWorkingDirectory }}
+                pythonVersion: ${{ variables.pythonVersion }}
+        -   bash: |
+                MODEL_APPROVED=$(cat model_approved.txt)
+                echo "##vso[task.setvariable variable=model_approved;isOutput=true]$MODEL_APPROVED"
+                echo "Model approved: $MODEL_APPROVED"
+                if [ "$MODEL_APPROVED" != "true" ]; then
+                  echo "Model not approved. Failing the step."
+                  exit 1
+                fi
+            name: modelEval
+            displayName: 'Set model approval variable and check approval'                
+
+-   stage: Build
+    dependsOn: Test
+    condition: succeeded()
+    jobs:
+    -   job: Build
+        displayName: Build
+        steps:
+        -   template: templates/azure-functions/build-func.yaml
+            parameters:
+                buildId: $(Build.BuildId)
+                runtime: python-uv
+                path: ${{variables.functionWorkingDirectory}}
+                artifactName: ${{variables.artifactName}}
+
+-   stage: DeployDev
+    dependsOn: 
+    -   Build
+    -   Evaluate_models
+    variables:
+    -   template: variables/dev-env.yaml
+    jobs:
+    -   template: templates/azure-functions/deploy-func.yaml
+        parameters:
+            functionAppName: ${{ variables.faName }}
+            buildId: $(Build.BuildId)
+            serviceConnection: ${{ variables.azureSubscription }}
+            environment: ${{ variables.environment }}
+            artifactName: ${{ variables.artifactName }}
+            resourceGroupName: '${{ variables.environment }}-adp-aicat-001'

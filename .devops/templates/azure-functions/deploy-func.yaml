@@ -1,0 +1,67 @@
+parameters:
+-   name: functionAppName
+    type: string
+
+-   name: BuildId
+    type: string
+
+-   name: environment
+    type: string
+
+-   name: resourceGroupName
+    type: string
+
+-   name: serviceConnection
+    type: string
+
+-   name: artifactName
+    type: string
+
+-   name: dependsOn
+    type: string
+    default: ''
+
+jobs:
+-   deployment: Deploy
+    displayName: Deploy Platform
+    pool:
+        vmImage: $(vmImageName)
+
+    ${{ if ne(parameters.dependsOn, '') }}:
+        dependsOn: ${{ parameters.dependsOn }}
+    environment: ${{ parameters.environment }}
+    strategy:
+        runOnce:
+            deploy:
+                steps:
+
+                -   task: DownloadBuildArtifacts@0
+                    inputs:
+                        buildType: current
+                        downloadType: single
+                        artifactName: ${{ parameters.artifactName }}
+                        downloadPath: $(System.ArtifactsDirectory)
+
+                -   task: AzureCLI@2
+                    inputs:
+                        azureSubscription: ${{ parameters.serviceConnection }}
+                        scriptType: 'bash'
+                        scriptLocation: 'inlineScript'
+                        inlineScript: |
+                            echo "Deploying using OneDeploy"
+                            az functionapp deployment source config-zip \
+                                --resource-group ${{ parameters.resourceGroupName }} \
+                                --name ${{ parameters.functionAppName }} \
+                                --src $(Pipeline.Workspace)/${{parameters.artifactName}}/${{ parameters.BuildId }}.zip
+
+                ### Preferred method using AzureFunctionApp task
+                ### Does not work with flex consumption plan
+                # -   task: AzureFunctionApp@2
+                #     displayName: Azure functions app deploy
+                #     inputs:
+                #         azureSubscription: ${{ parameters.serviceConnection }}
+                #         appType: functionAppLinux
+                #         appName: ${{ parameters.functionAppName }}
+                #         package: $(Pipeline.Workspace)/${{parameters.artifactName}}/${{ parameters.BuildId }}.zip
+                #         deploymentMethod: auto
+
